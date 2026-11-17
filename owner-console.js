@@ -97,7 +97,6 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https:/
   function stateClass(state) { return state === "مشترك" ? "active" : state === "تجريبي" ? "" : "pending"; }
   async function loadCustomers() {
     if (!isOwner) return;
-    $("owner-subscription-queue").innerHTML = '<div class="owner-empty">جارٍ تحميل طلبات الاشتراك...</div>';
     try {
       const result = await api("/api/owner/customers");
       customers = Array.isArray(result.customers) ? result.customers : [];
@@ -130,6 +129,8 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https:/
   }
   async function loadSupport() {
     if (!isOwner) return;
+    // Do not replace a reply/status field while the owner is actively editing it.
+    if ($("owner-support-list")?.contains(document.activeElement)) return;
     try {
       const result = await api("/api/support");
       supportTickets = Array.isArray(result) ? result : [];
@@ -297,10 +298,21 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword } from "https:/
     showView("subscriptions");
     $("owner-access-state").textContent = "تم فتح مركز تحكم المالك الخاص.";
   });
-  // Keep both owner modules fresh while this private dashboard is visible.
-  setInterval(() => {
-    if (isOwner && document.visibilityState === "visible" && !refreshBusy) {
-      Promise.all([loadCustomers(),loadSupport()]);
+  // Multi-device sync: refresh shared owner data every 5 seconds while visible.
+  // All devices use the same authenticated account and the same Cloudflare/Firebase data.
+  // Pause while a manual refresh is running and preserve any support reply being edited.
+  let syncRefreshRunning = false;
+  const syncOwnerDevices = async () => {
+    if (!isOwner || document.visibilityState !== "visible" || refreshBusy || syncRefreshRunning) return;
+    syncRefreshRunning = true;
+    try {
+      await Promise.all([loadCustomers(), loadSupport()]);
+    } finally {
+      syncRefreshRunning = false;
     }
-  }, 12000);
+  };
+  setInterval(syncOwnerDevices, 5000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncOwnerDevices();
+  });
 })();
