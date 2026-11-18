@@ -5,6 +5,40 @@
 
 <head>
     <script>
+/* Install ACT in-app alerts before any app module can call alert(). */
+(function () {
+  var toastTimer = null;
+  window.alert = function (message) {
+    function showToast() {
+      if (!document.body) return;
+      var toast = document.getElementById("act-mobile-toast");
+      if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "act-mobile-toast";
+        toast.setAttribute("role", "status");
+        toast.setAttribute("aria-live", "polite");
+        document.body.appendChild(toast);
+      }
+      toast.textContent = String(message == null ? "" : message);
+      toast.classList.add("show");
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(function () { toast.classList.remove("show"); }, 3600);
+    }
+    if (document.body) showToast();
+    else document.addEventListener("DOMContentLoaded", showToast, { once: true });
+  };
+  /* Hide the browser's "<site> says" box for plain save confirmations.
+     Only messages that are about SAVING (and not delete / sign-out / restore / choices) are auto-accepted.
+     Delete and other risky questions keep their safety prompt. */
+  var nativeConfirm = window.confirm ? window.confirm.bind(window) : null;
+  window.confirm = function (message) {
+    var text = String(message == null ? "" : message);
+    var isSave = /حفظ|save/i.test(text);
+    var isRisky = /حذف|مسح|delete|remove|erase|الخروج|sign out|استعادة|restore|شغال|نقل/i.test(text);
+    if (isSave && !isRisky) return true;
+    return nativeConfirm ? nativeConfirm(message) : true;
+  };
+})();
 /* apply saved theme + language BEFORE first paint (no flash, no wrong colours) */
 (function(){try{var t=localStorage.getItem("actPhoneManager_theme")==="light"?"light":"dark";var l=localStorage.getItem("actPhoneManager_language")==="en"?"en":"ar";var d=document.documentElement;d.setAttribute("data-theme",t);d.lang=l;d.dir=l==="ar"?"rtl":"ltr";var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",t==="light"?"#ffffff":"#000000");}catch(e){}})();
 </script>
@@ -41,7 +75,7 @@
 
     <link
         rel="stylesheet"
-        href="style.css"
+        href="style.css?v=20261119-devices-toast-1"
     >
 
 
@@ -6963,7 +6997,7 @@
 <script type="module" src="./fix-activation.js"></script>
 <script src="./i18n-en.js"></script>
 <script src="./pwa-install.js"></script>
-<script type="module" src="./script.js?v=20261118-search-invoice-3"></script>
+<script type="module" src="./script.js?v=20261119-home-exit-device-default-3"></script>
 <script src="./act-workspace-persistence.js"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>

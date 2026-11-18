@@ -5241,11 +5241,12 @@ function showSalesArea() {
     formSection =
         SECTIONS.SALE;
 
-    closeMaintenanceView();
+    // Each preparation step is isolated: one failing helper must never stop the device data from rendering.
+    try { closeMaintenanceView(); } catch (error) { console.warn("closeMaintenanceView:", error); }
 
-    hideEmployeeViews();
+    try { hideEmployeeViews(); } catch (error) { console.warn("hideEmployeeViews:", error); }
 
-    hideSaleSearch();
+    try { hideSaleSearch(); } catch (error) { console.warn("hideSaleSearch:", error); }
 
 
     // ==========================================
@@ -5259,7 +5260,21 @@ function showSalesArea() {
     }
 
 
-    renderSaleDevices();
+    // Open the device inventory directly on the phone-sales data view.
+    // Do not rely on a later click listener: navigation is handled in capture phase.
+    const defaultDeviceSaleTab = document.getElementById("device-sale-tab");
+    const defaultDevicePurchaseTab = document.getElementById("device-purchase-tab");
+    const phoneSaleSection = document.getElementById("phone-sale-section");
+    const phonePurchasesSection = document.getElementById("phone-purchases-section");
+    const phonePurchaseForm = document.getElementById("phone-purchase-form");
+    if (defaultDeviceSaleTab) defaultDeviceSaleTab.classList.add("active");
+    if (defaultDevicePurchaseTab) defaultDevicePurchaseTab.classList.remove("active");
+    if (phoneSaleSection) phoneSaleSection.style.display = "block";
+    if (phonePurchasesSection) phonePurchasesSection.style.display = "none";
+    if (phonePurchaseForm) phonePurchaseForm.style.display = "none";
+    try {
+        if (typeof renderSaleDevices === "function") renderSaleDevices();
+    } catch (error) { console.error("renderSaleDevices:", error); }
 }
 
 // ====================================================== 
@@ -11335,9 +11350,15 @@ if (navHome) {
                 showSalesArea();
             }
 
+            // Open the phone-sales data immediately (same as pressing the "بيع التلفونات" tab).
+            try {
+                const saleTabButton = document.getElementById("device-sale-tab");
+                if (saleTabButton) saleTabButton.click();
+            } catch (error) { console.warn("device-sale-tab:", error); }
+
             window.scrollTo({
                 top: 0,
-                behavior: "smooth"
+                behavior: "auto"
             });
 
         }, true);
@@ -23683,3 +23704,155 @@ document.getElementById("manual-day-close-button")?.addEventListener("click", fu
   });
 })();
 
+
+/* =========================================================
+   MOBILE HOME MODULE EXIT FIX (v2)
+   Phone-sized screens only. Applies ONLY to sections opened from the four
+   ACT MODULES cards on the home screen (devices / maintenance / employees / sales).
+   Leaving such a section (any back/close button, or the phone's Back button)
+   always returns straight to the home screen - never to a blank screen.
+========================================================= */
+(function initMobileHomeModuleExit(){
+  'use strict';
+  const mobile = () => window.matchMedia && window.matchMedia('(max-width: 767px)').matches;
+  const CARD_SELECTOR = '#home-devices,#home-maintenance,#home-employees,#home-sales';
+  let openedFromHomeModule = false;
+  let userChoseMore = false;
+  let historyPushed = false;
+  let observer = null;
+
+  function forceHome(){
+    const home = document.getElementById('home-section');
+    const ids = [
+      'sales-area','customers-section','employees-section','wallet-section','account-section',
+      'independent-sales-section','independent-purchases-section','more-section',
+      'day-close-section','customer-management-section','safe-overview-section',
+      'settings-section','accessories-section','general-reports-section','previous-days-section',
+      'owner-console-section','customer-support-section'
+    ];
+    ids.forEach(id=>{const el=document.getElementById(id);if(el)el.style.setProperty('display','none','important');});
+    document.querySelectorAll('.sales-area,.act-extra-section').forEach(el=>el.style.setProperty('display','none','important'));
+    document.querySelectorAll('.independent-sales-view,.independent-purchases-view').forEach(el=>el.style.setProperty('display','none','important'));
+    if(home){ home.hidden = false; home.style.setProperty('display','block','important'); }
+    const navHome=document.getElementById('nav-home');
+    document.querySelectorAll('.bottom-nav-button').forEach(el=>el.classList.remove('active'));
+    if(navHome) navHome.classList.add('active');
+    openedFromHomeModule=false;
+    userChoseMore=false;
+    const back=document.getElementById('act-mobile-home-return');
+    if(back) back.hidden=true;
+    window.scrollTo({top:0,behavior:'auto'});
+    // let the workspace-persistence module save "home" as the current screen
+    try { window.dispatchEvent(new Event('pagehide')); } catch (_) {}
+  }
+
+  function ensureReturnButton(){
+    if(document.getElementById('act-mobile-home-return')) return;
+    const button=document.createElement('button');
+    button.id='act-mobile-home-return';
+    button.type='button';
+    button.textContent='← الرئيسية';
+    button.setAttribute('aria-label','العودة إلى الشاشة الرئيسية');
+    button.hidden=true;
+    button.addEventListener('click',function(){ leaveToHome(true); });
+    document.body.appendChild(button);
+  }
+
+  // Leave to home; if we pushed a history entry, consume it so Back keeps working normally afterwards.
+  function leaveToHome(consumeHistory){
+    forceHome();
+    if(consumeHistory && historyPushed){
+      historyPushed=false;
+      try { history.back(); } catch (_) {}
+    }
+  }
+
+  function isVisible(el){
+    if(!el) return false;
+    return window.getComputedStyle(el).display !== 'none';
+  }
+
+  // Any attempt to land on the "More" screen while inside a home module = an exit button was pressed.
+  function watchMoreScreen(){
+    if(observer) return;
+    const more=document.getElementById('more-section');
+    if(!more || typeof MutationObserver==='undefined') return;
+    observer=new MutationObserver(function(){
+      if(!mobile() || !openedFromHomeModule || userChoseMore) return;
+      if(isVisible(more)) leaveToHome(true);
+    });
+    observer.observe(more,{attributes:true,attributeFilter:['style','class','hidden']});
+  }
+
+  function markHomeModule(event){
+    const card=event.target.closest(CARD_SELECTOR);
+    if(!card || !mobile()) return;
+    openedFromHomeModule=true;
+    userChoseMore=false;
+    ensureReturnButton();
+    watchMoreScreen();
+    if(!historyPushed){
+      try { history.pushState({actHomeModule:true},''); historyPushed=true; } catch (_) {}
+    }
+    const back=document.getElementById('act-mobile-home-return');
+    if(back) back.hidden=false;
+    requestAnimationFrame(()=>{const b=document.getElementById('act-mobile-home-return');if(b && openedFromHomeModule)b.hidden=false;});
+  }
+
+  document.addEventListener('click',function(event){
+    if(!mobile()) return;
+    const target=event.target;
+    if(!target || !target.closest) return;
+
+    if(target.closest('#nav-home')){
+      openedFromHomeModule=false;
+      const b=document.getElementById('act-mobile-home-return');
+      if(b) b.hidden=true;
+      return;
+    }
+    // Choosing another main tab by hand ends the "opened from home card" mode.
+    if(target.closest('#nav-more,#nav-sales,#nav-purchases,#nav-devices,#nav-account')){
+      userChoseMore=true;
+      openedFromHomeModule=false;
+      const b=document.getElementById('act-mobile-home-return');
+      if(b) b.hidden=true;
+      return;
+    }
+    markHomeModule(event);
+    if(!openedFromHomeModule) return;
+
+    const exit=target.closest(
+      '[data-act-extra-back],[data-act-training-back],[data-account-back],'+
+      '.act-extra-back,.account-back-button,#day-close-back-button,.day-close-back,'+
+      '.maintenance-exit-button,#maintenance-exit-button,.wallet-close-button'
+    );
+    if(!exit) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    leaveToHome(true);
+  },true);
+
+  // The phone's own Back button / gesture: go to home instead of a blank screen or leaving the app.
+  window.addEventListener('popstate',function(){
+    if(!mobile()) return;
+    if(openedFromHomeModule){
+      historyPushed=false;
+      forceHome();
+    }
+  });
+
+  // Direct device view is set in showSalesArea; this is a safe startup fallback.
+  function setDeviceSaleDefault(){
+    const sale=document.getElementById('device-sale-tab');
+    const purchase=document.getElementById('device-purchase-tab');
+    const saleSection=document.getElementById('phone-sale-section');
+    const purchaseSection=document.getElementById('phone-purchases-section');
+    if(!sale || !saleSection) return;
+    sale.classList.add('active');
+    purchase?.classList.remove('active');
+    saleSection.style.display='block';
+    if(purchaseSection) purchaseSection.style.display='none';
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',setDeviceSaleDefault,{once:true});
+  else setDeviceSaleDefault();
+})();
