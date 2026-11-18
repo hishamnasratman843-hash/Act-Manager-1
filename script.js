@@ -3961,6 +3961,16 @@ function createDayCloseSnapshot(dateKey) {
 
 
     // ==================================================
+    // 🎧 حركة مخزون الإكسسوارات
+    // ==================================================
+    let dayAccessoryMovements = [];
+    try {
+        const movementKey = getUserKey("accessoryMovements");
+        const movementRows = JSON.parse(localStorage.getItem(movementKey) || "[]");
+        if (Array.isArray(movementRows)) dayAccessoryMovements = movementRows.filter(item => String(item.date || item.createdAt || "").slice(0, 10) === dateKey);
+    } catch (error) { console.warn("Day close accessory movement error", error); }
+
+    // ==================================================
     // 👨‍💼 الموظفين
     // ==================================================
 
@@ -4122,7 +4132,7 @@ function createDayCloseSnapshot(dateKey) {
                 return (
                     total +
                     Number(
-                        purchase.price ||
+                        purchase.total || purchase.price ||
                         0
                     )
                 );
@@ -4265,6 +4275,9 @@ function createDayCloseSnapshot(dateKey) {
 
             wallet:
                 dayWalletTransactions,
+
+            accessoryMovements:
+                dayAccessoryMovements,
 
             employees:
                 employeesSnapshot,
@@ -5019,6 +5032,8 @@ function renderPreviousDays() {
             }
         );
 
+    renderDayCloseComparison();
+
 }
 
 
@@ -5026,54 +5041,47 @@ function renderPreviousDays() {
 // تفاصيل يوم محفوظ
 // ======================================================
 
-function openDayCloseDetails(
-    dateKey
-) {
+function openDayCloseDetails(dateKey) {
+    const archive = loadDayCloseArchives().find(item => item && item.date === dateKey);
+    if (!archive) return;
+    const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;", "'":"&#39;"}[ch]));
+    const summary = archive.summary || {};
+    const groups = [
+        ["المبيعات", archive.data?.sales || []],
+        ["المشتريات", [...(archive.data?.purchases || []), ...(archive.data?.independentPurchases || [])]],
+        ["حركة الأجهزة", archive.data?.devices || []],
+        ["حركة المحفظة", archive.data?.wallet || []],
+        ["حركة الإكسسوارات", archive.data?.accessoryMovements || []]
+    ];
+    const rows = groups.map(([title, items]) => `<section><h2>${title} (${items.length})</h2>${items.length ? `<table><thead><tr><th>البيان</th><th>القيمة / الكمية</th></tr></thead><tbody>${items.map(item => {
+        const name = item.productName || item.phoneName || item.product || item.name || item.service || item.operationName || item.type || "عملية";
+        const value = item.total ?? item.price ?? item.amount ?? item.quantity ?? "—";
+        return `<tr><td>${esc(name)}</td><td>${esc(value)}</td></tr>`;
+    }).join("")}</tbody></table>` : `<p>لا توجد عمليات مسجلة.</p>`}</section>`).join("");
+    const popup = window.open("", "act-day-close-report", "width=900,height=750");
+    if (!popup) { alert("اسمح بفتح النوافذ المنبثقة لعرض وطباعة التقرير."); return; }
+    popup.document.open();
+    popup.document.write(`<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><title>تقرير إقفال ${esc(dateKey)}</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#182230}h1{margin:0 0 8px}.meta{color:#667085;margin-bottom:20px}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.tile{border:1px solid #ddd;border-radius:10px;padding:12px}.tile b{display:block;margin-bottom:5px}section{margin-top:22px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:right}button{padding:10px 18px;margin:14px 0;cursor:pointer}@media print{button{display:none}}</style><h1>تقرير إقفال اليوم</h1><div class="meta">${esc(formatDayCloseDate(archive.date))} · تم الحفظ: ${esc(archive.closedAt || "—")}</div><div class="summary"><div class="tile"><b>عدد المبيعات</b>${Number(summary.salesCount)||0}</div><div class="tile"><b>إجمالي المبيعات</b>${esc(formatMoney(summary.salesTotal||0))}</div><div class="tile"><b>عدد المشتريات</b>${Number(summary.purchasesCount)||0}</div><div class="tile"><b>إجمالي المشتريات</b>${esc(formatMoney(summary.purchasesTotal||0))}</div><div class="tile"><b>إيداع المحفظة</b>${esc(formatMoney(summary.walletDepositTotal||0))}</div><div class="tile"><b>سحب المحفظة</b>${esc(formatMoney(summary.walletWithdrawTotal||0))}</div><div class="tile"><b>الأجهزة</b>${Number(summary.devicesCount)||0}</div><div class="tile"><b>الموظفون</b>${Number(summary.employeesCount)||0}</div></div><button onclick="window.print()">طباعة التقرير</button>${rows}</html>`);
+    popup.document.close();
+}
 
-    const archives =
-        loadDayCloseArchives();
-
-
-    const archive =
-        archives.find(
-            function (item) {
-
-                return (
-                    item.date ===
-                    dateKey
-                );
-
-            }
-        );
-
-
-    if (!archive) {
-        return;
-    }
-
-
-    let message =
-        formatDayCloseDate(
-            archive.date
-        );
-
-
-    message +=
-        "\n\nعدد العمليات: " +
-        archive.operationsCount;
-
-
-    message +=
-        "\nإجمالي قيمة العمليات: " +
-        formatMoney(
-            archive.totalAmount
-        );
-
-
-    alert(
-        message
-    );
-
+function renderDayCloseComparison() {
+    const container = document.getElementById("day-close-comparison");
+    if (!container) return;
+    const archives = loadDayCloseArchives().slice().sort((a,b)=>b.date.localeCompare(a.date));
+    if (archives.length < 2) { container.innerHTML = `<small>ستظهر المقارنة بعد حفظ إقفال يومين على الأقل.</small>`; return; }
+    const options = archives.map(a => `<option value="${a.date}">${formatDayCloseDate(a.date)}</option>`).join("");
+    container.innerHTML = `<div class="day-close-compare-controls"><label>اليوم الأول <select id="day-close-compare-a">${options}</select></label><label>اليوم الثاني <select id="day-close-compare-b">${options}</select></label><button type="button" id="day-close-compare-run">مقارنة اليومين</button></div><div id="day-close-compare-result"></div>`;
+    const a = container.querySelector("#day-close-compare-a"), b = container.querySelector("#day-close-compare-b");
+    if (b && archives[1]) b.value = archives[1].date;
+    container.querySelector("#day-close-compare-run")?.addEventListener("click", () => {
+        const first = archives.find(x=>x.date===a.value), second = archives.find(x=>x.date===b.value);
+        const target = container.querySelector("#day-close-compare-result");
+        if (!first || !second || first.date === second.date) { target.textContent = "اختر يومين مختلفين للمقارنة."; return; }
+        const x=first.summary||{}, y=second.summary||{};
+        const rows=[["المبيعات",x.salesTotal,y.salesTotal],["المشتريات",x.purchasesTotal,y.purchasesTotal],["عدد عمليات البيع",x.salesCount,y.salesCount],["عدد عمليات الشراء",x.purchasesCount,y.purchasesCount],["إيداع المحفظة",x.walletDepositTotal,y.walletDepositTotal],["سحب المحفظة",x.walletWithdrawTotal,y.walletWithdrawTotal]];
+        target.innerHTML=`<div class="day-close-compare-table"><h4>${formatDayCloseDate(first.date)} مقابل ${formatDayCloseDate(second.date)}</h4><table><thead><tr><th>المؤشر</th><th>اليوم الأول</th><th>اليوم الثاني</th><th>الفرق</th></tr></thead><tbody>${rows.map(([label,v1,v2])=>`<tr><td>${label}</td><td>${formatMoney(v1||0)}</td><td>${formatMoney(v2||0)}</td><td>${formatMoney((Number(v2)||0)-(Number(v1)||0))}</td></tr>`).join("")}</tbody></table></div>`;
+    });
 }
 
 
@@ -13383,29 +13391,48 @@ function saveSalesData() {
                 if (wantedSerial) return String(record.serialNumber || record.serial || "").trim() === wantedSerial;
                 return String(record.phoneName || record.productName || record.name || "").trim().toLocaleLowerCase("ar") === wantedName;
             }).slice(0, item.quantity);
+            if (matching.length && matching.length !== item.quantity) {
+                alert(`الجهاز ${item.name} موجود في قسم الأجهزة بعدد ${matching.length} فقط. راجع الكمية أو أضف كل جهاز إلى قسم بيع الأجهزة قبل إصدار الفاتورة.`);
+                return;
+            }
             item.deviceRecords = matching.map(record => ({ ...record }));
         }
 
+        // Validate and consume every linked stock item before saving the invoice.
+        // A missing item is an error (not permission to create an untracked sale).
         const consumed = [];
+        const rollbackConsumedStock = () => consumed.slice().reverse().forEach(entry => {
+            if (entry.type === "phone") window.actPhoneInventoryRestoreSale?.(entry.name, entry.serial, entry.quantity || 1);
+            if (entry.type === "accessory") window.actAccessoryRestoreSale?.(entry.name, entry.quantity || 1);
+        });
         for (const item of sale.items) {
-            let result = { matched: false, ok: true };
-            // Existing device-sale records have already reduced phone stock.
-            const unitsToConsume = item.type === "accessory" ? 1 : (item.type === "phone" && item.deviceRecords?.length ? 0 : item.quantity);
-            for (let unit = 0; unit < unitsToConsume; unit++) {
-                if (item.type === "phone" && window.actPhoneInventoryConsumeSale) {
-                    result = window.actPhoneInventoryConsumeSale(item.name, item.serial);
-                } else if (item.type === "accessory" && window.actAccessoryConsumeSale) {
-                    result = window.actAccessoryConsumeSale(item.name, item.quantity);
+            if (item.type !== "phone" && item.type !== "accessory") continue;
+            // Device cards in Devices > Sale already consumed their purchase stock.
+            if (item.type === "phone" && item.deviceRecords?.length === item.quantity) continue;
+            if (item.type === "phone") {
+                for (let unit = 0; unit < item.quantity; unit++) {
+                    const result = window.actPhoneInventoryConsumeSale
+                        ? window.actPhoneInventoryConsumeSale(item.name, item.serial)
+                        : { matched: false, ok: false };
+                    if (!result.matched || !result.ok) {
+                        rollbackConsumedStock();
+                        alert(`بيانات الجهاز «${item.name}» غير موجودة أو غير متاحة في مخزون الأجهزة. أضفه أولًا إلى قسم بيع الأجهزة.`);
+                        return;
+                    }
+                    consumed.push({ type: "phone", name: item.name, serial: item.serial, quantity: 1 });
                 }
-                if (result.matched && !result.ok) {
-                    consumed.slice().reverse().forEach(entry => {
-                        if (entry.type === "phone") window.actPhoneInventoryRestoreSale?.(entry.name, entry.serial, 1);
-                        if (entry.type === "accessory") window.actAccessoryRestoreSale?.(entry.name, entry.quantity || 1);
-                    });
-                    alert(item.type === "phone" ? "الجهاز أو السيريال غير متاح في مخزون الأجهزة." : "كمية الإكسسوار غير متاحة في المخزون.");
+            } else {
+                const result = window.actAccessoryConsumeSale
+                    ? window.actAccessoryConsumeSale(item.name, item.quantity)
+                    : { matched: false, ok: false };
+                if (!result.matched || !result.ok) {
+                    rollbackConsumedStock();
+                    alert(result.matched
+                        ? `الصنف «${item.name}» موجود لكن الكمية المتاحة أقل من ${item.quantity}.`
+                        : `الصنف «${item.name}» غير موجود في قسم الإكسسوارات. أضفه أولًا إلى المخزون.`);
                     return;
                 }
-                if (result.matched) consumed.push({ type: item.type, name: item.name, serial: item.serial, quantity: item.type === "accessory" ? item.quantity : 1 });
+                consumed.push({ type: "accessory", name: item.name, quantity: item.quantity });
             }
         }
 
@@ -14023,18 +14050,18 @@ function saveSalesData() {
         let consumedUnits = 0;
         if (itemType === "accessory" && window.actAccessoryConsumeSale) {
             const stock = window.actAccessoryConsumeSale(name.trim(), quantity);
-            if (stock?.matched && !stock.ok) { alert("الكمية غير متاحة في مخزون الإكسسوارات."); return; }
-            trackedStock = !!stock?.matched;
+            if (!stock?.matched || !stock.ok) { alert(stock?.matched ? "الكمية غير متاحة في مخزون الإكسسوارات." : `الصنف «${name.trim()}» غير موجود في قسم الإكسسوارات.`); return; }
+            trackedStock = true;
             consumedUnits = trackedStock ? quantity : 0;
         } else if (itemType === "phone" && window.actPhoneInventoryConsumeSale) {
             for (let unit = 0; unit < quantity; unit++) {
                 const stock = window.actPhoneInventoryConsumeSale(name.trim(), "");
-                if (stock?.matched && !stock.ok) {
+                if (!stock?.matched || !stock.ok) {
                     if (consumedUnits) window.actPhoneInventoryRestoreSale?.(name.trim(), "", consumedUnits);
-                    alert("كمية الجهاز غير متاحة في المخزون؛ تم التراجع عن الخصم الجزئي.");
+                    alert(`الجهاز «${name.trim()}» غير موجود أو الكمية غير متاحة في قسم بيع الأجهزة؛ تم التراجع عن الخصم الجزئي.`);
                     return;
                 }
-                if (stock?.matched) { trackedStock = true; consumedUnits++; }
+                trackedStock = true; consumedUnits++;
             }
         }
 

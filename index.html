@@ -2927,6 +2927,12 @@
             class="previous-days-list"
         ></div>
 
+        <div class="day-close-comparison-panel">
+            <h3>📊 مقارنة حركة الأيام</h3>
+            <p>قارن إجمالي المبيعات والمشتريات والإيداعات والسحوبات بين يومين محفوظين.</p>
+            <div id="day-close-comparison"></div>
+        </div>
+
     </div>
 
 </section>
@@ -7008,4 +7014,8 @@
 .purchase-card .purchase-device-photo{display:block;max-width:180px;max-height:180px;object-fit:contain;border-radius:12px;margin:10px auto;}
 .ind-purchase-record b{font-weight:700;}
 @media(max-width:600px){.purchase-card .device-actions{width:100%;}.purchase-card .device-actions button{flex:1 1 130px;}}
+
+.day-close-comparison-panel{margin:18px 0;padding:18px;border:1px solid rgba(140,160,190,.22);border-radius:16px;background:rgba(120,140,170,.06)}
+.day-close-comparison-panel h3{margin:0 0 6px}.day-close-comparison-panel p{opacity:.72;margin:0 0 14px;font-size:13px}
+.day-close-compare-controls{display:flex;flex-wrap:wrap;align-items:end;gap:10px}.day-close-compare-controls label{display:grid;gap:6px;flex:1;min-width:160px;font-size:13px}.day-close-compare-controls select,.day-close-compare-controls button{min-height:40px;border-radius:9px;padding:8px 11px;border:1px solid rgba(140,160,190,.3);background:var(--card-bg,rgba(255,255,255,.08));color:inherit}.day-close-compare-controls button{cursor:pointer}.day-close-compare-table{overflow-x:auto;margin-top:14px}.day-close-compare-table table{width:100%;border-collapse:collapse;min-width:480px}.day-close-compare-table th,.day-close-compare-table td{padding:9px;border-bottom:1px solid rgba(140,160,190,.2);text-align:right;font-size:13px}
 </style>
