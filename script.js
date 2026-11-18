@@ -570,6 +570,14 @@ let editingDeviceId = null;
 let currentSection =
     SECTIONS.SALE;
 
+window.addEventListener("act-workspace-restored", function (event) {
+    const restoredSection = event.detail?.maintenanceSection;
+    if (restoredSection && Object.values(SECTIONS).includes(restoredSection)) {
+        currentSection = restoredSection;
+        if (typeof renderCurrentView === "function") renderCurrentView();
+    }
+});
+
 let formSection =
     SECTIONS.SALE;
 
@@ -5530,6 +5538,8 @@ if (closeDeviceFormButton) {
 
 function saveDevice() {
 
+    const devicePhotoData = document.getElementById("device-photo-input")?.dataset.imageData || "";
+
     const name =
         phoneName
             ? phoneName.value.trim()
@@ -5628,7 +5638,8 @@ function saveDevice() {
                 serialNumber:
                     serialNumber
                         ? serialNumber.value.trim()
-                        : ""
+                        : "",
+                photo: devicePhotoData || devices[index].photo || ""
             };
 
 
@@ -5705,6 +5716,7 @@ function saveDevice() {
             status:
                 "البيع",
 
+            photo: devicePhotoData,
             createdAt:
                 new Date().toISOString()
         };
@@ -5784,6 +5796,12 @@ function saveDevice() {
     editingDeviceId =
         null;
 
+    // Each newly-created device starts with an empty photo selection.
+    const savedPhotoInput = document.getElementById("device-photo-input");
+    if (savedPhotoInput) { savedPhotoInput.value = ""; savedPhotoInput.dataset.imageData = ""; }
+    const savedPhotoPreview = document.getElementById("device-photo-preview");
+    if (savedPhotoPreview) { savedPhotoPreview.removeAttribute("src"); savedPhotoPreview.style.display = "none"; }
+
     closeDeviceForm();
 
     renderSaleDevices();
@@ -5801,6 +5819,29 @@ if (saveDeviceButton) {
         saveDevice
     );
 }
+
+const devicePhotoInput = document.getElementById("device-photo-input");
+const devicePhotoPreview = document.getElementById("device-photo-preview");
+devicePhotoInput?.addEventListener("change", function () {
+    const file = this.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { alert("اختر صورة صالحة."); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const scale = Math.min(1, 1000 / Math.max(img.width, img.height));
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+            devicePhotoInput.dataset.imageData = canvas.toDataURL("image/jpeg", 0.78);
+            if (devicePhotoPreview) { devicePhotoPreview.src = devicePhotoInput.dataset.imageData; devicePhotoPreview.style.display = "block"; }
+        };
+        img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+});
 
 
 // ======================================================
@@ -5949,6 +5990,7 @@ function renderSaleDevices() {
                         </div>
 
 
+                        ${device.photo ? `<img class="purchase-device-photo" src="${device.photo}" alt="صورة الجهاز">` : ""}
                         <h3>
                             ${escapeHTML(
                                 device.phoneName
@@ -5956,39 +5998,21 @@ function renderSaleDevices() {
                         </h3>
 
 
-                        <div class="device-info">
-                            👤
-                            ${escapeHTML(
-                                device.customerName
-                            )}
-                        </div>
+                        ${device.customerName ? `<div class="device-info purchase-detail-row"><strong>اسم العميل:</strong> <span>${escapeHTML(device.customerName)}</span></div>` : ""}
+                        ${device.sellerName ? `<div class="device-info purchase-detail-row"><strong>اسم البائع:</strong> <span>${escapeHTML(device.sellerName)}</span></div>` : ""}
+                        <div class="device-info purchase-detail-row"><strong>حالة الكرتونة:</strong> <span>${device.boxIncluded === false ? "بدون كرتونة" : "معاه كرتونة"}</span></div>
 
 
-                        <div class="device-info">
-                            📅
-                            ${escapeHTML(
-                                device.receiveDate
-                            )}
-                        </div>
+                        ${device.receiveDate ? `<div class="device-info purchase-detail-row"><strong>تاريخ الاستلام:</strong> <span>${escapeHTML(device.receiveDate)}</span></div>` : ""}
 
 
-                        <div class="device-info">
-                            ⏰
-                            ${escapeHTML(
-                                device.receiveTime
-                            )}
-                        </div>
+                        ${device.receiveTime ? `<div class="device-info purchase-detail-row"><strong>وقت الاستلام:</strong> <span>${escapeHTML(device.receiveTime)}</span></div>` : ""}
 
 
                         ${
                             device.serialNumber
                                 ? `
-                                <div class="device-info">
-                                    🔢
-                                    ${escapeHTML(
-                                        device.serialNumber
-                                    )}
-                                </div>
+                                <div class="device-info purchase-detail-row"><strong>رقم السيريال:</strong> <span>${escapeHTML(device.serialNumber)}</span></div>
                                 `
                                 : ""
                         }
@@ -5997,12 +6021,7 @@ function renderSaleDevices() {
                         ${
                             device.problem
                                 ? `
-                                <div class="device-info">
-                                    🛠️
-                                    ${escapeHTML(
-                                        device.problem
-                                    )}
-                                </div>
+                                <div class="device-info purchase-detail-row"><strong>العطل / الحالة:</strong> <span>${escapeHTML(device.problem)}</span></div>
                                 `
                                 : ""
                         }
@@ -6011,12 +6030,7 @@ function renderSaleDevices() {
                         ${
                             device.changedParts
                                 ? `
-                                <div class="device-info">
-                                    🔩
-                                    ${escapeHTML(
-                                        device.changedParts
-                                    )}
-                                </div>
+                                <div class="device-info purchase-detail-row"><strong>القطع المتغيرة:</strong> <span>${escapeHTML(device.changedParts)}</span></div>
                                 `
                                 : ""
                         }
@@ -6025,12 +6039,7 @@ function renderSaleDevices() {
                         ${
                             device.price
                                 ? `
-                                <div class="device-price">
-                                    💰
-                                    ${formatMoney(
-                                        device.price
-                                    )}
-                                </div>
+                                <div class="device-price purchase-detail-row"><strong>السعر:</strong> <span>${formatMoney(device.price)}</span></div>
                                 `
                                 : ""
                         }
@@ -7485,6 +7494,11 @@ function openMaintenanceDeviceForm(
 
                 </div>
 
+                <div class="form-group">
+                    <label>صورة الجهاز (الأمام والخلف)</label>
+                    <input id="maintenance-device-photo" type="file" accept="image/*">
+                    <img id="maintenance-device-photo-preview" alt="معاينة صورة جهاز الصيانة" style="display:none;max-width:150px;max-height:150px;object-fit:contain;border-radius:12px;margin-top:8px">
+                </div>
 
                 <div class="form-group">
 
@@ -7611,6 +7625,28 @@ function openMaintenanceDeviceForm(
         modal
     );
 
+    const maintenancePhotoInput = document.getElementById("maintenance-device-photo");
+    const maintenancePhotoPreview = document.getElementById("maintenance-device-photo-preview");
+    maintenancePhotoInput?.addEventListener("change", function () {
+        const file = this.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith("image/")) { alert("اختر صورة صالحة."); return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const scale = Math.min(1, 1000 / Math.max(img.width, img.height));
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+                maintenancePhotoInput.dataset.imageData = canvas.toDataURL("image/jpeg", 0.78);
+                if (maintenancePhotoPreview) { maintenancePhotoPreview.src = maintenancePhotoInput.dataset.imageData; maintenancePhotoPreview.style.display = "block"; }
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
 
     const closeButton =
         document.getElementById(
@@ -7780,6 +7816,8 @@ function openMaintenanceDeviceForm(
 
                     notes:
                         notesValue,
+
+                    photo: document.getElementById("maintenance-device-photo")?.dataset.imageData || "",
 
                     category:
                         status,
@@ -8150,6 +8188,8 @@ function renderMaintenanceCard(device, index) {
 
             </div>
 
+
+            ${device.photo ? `<img class="purchase-device-photo" src="${device.photo}" alt="صورة جهاز الصيانة">` : ""}
 
             <!-- بيانات الجهاز: كل معلومة في سطر -->
             <div class="premium-device-details">
@@ -13250,8 +13290,8 @@ function saveSalesData() {
             productInput?.focus();
             return;
         }
-        if (items.some(item => item.type === "phone" && item.quantity !== 1)) {
-            alert("كل جهاز تلفون لازم يكون في سطر مستقل بكمية 1، حتى يتم ربط السيريال والمخزون والمرتجع بالجهاز الصحيح.");
+        if (items.some(item => item.type === "phone" && item.serial && item.quantity > 1)) {
+            alert("لو هتبيع أكثر من جهاز من نفس النوع، اترك السيريال فارغًا أو أضف كل جهاز بسيرياله في سطر مستقل.");
             return;
         }
         if (values.discount < 0 || values.paid < 0) {
@@ -13875,6 +13915,7 @@ function saveSalesData() {
                                         🖨️
                                     </button>
 
+                                    <button type="button" class="sales-print-button sales-edit-button" data-edit-sale="${salesEscape(sale.id)}">✏️ تعديل</button>
                                     <button type="button" class="sales-return-button" data-return-sale="${salesEscape(sale.id)}">↩️ مرتجع</button>
                                     <button
                                         type="button"
@@ -13928,6 +13969,10 @@ function saveSalesData() {
             );
 
 
+        document.querySelectorAll("[data-edit-sale]").forEach(button => {
+            button.onclick = () => editExistingSale(button.getAttribute("data-edit-sale"));
+        });
+
         document.querySelectorAll("[data-return-sale]").forEach(button => {
             button.onclick = () => returnSaleItem(button.getAttribute("data-return-sale"));
         });
@@ -13954,6 +13999,67 @@ function saveSalesData() {
             );
     }
 
+
+    /* =========================================================
+       EDIT EXISTING INVOICE — append additional items safely
+       ========================================================= */
+    function editExistingSale(id) {
+        const sale = salesData.find(item => String(item.id) === String(id));
+        if (!sale) return;
+        const name = prompt("اسم المنتج أو الصنف الإضافي:");
+        if (name === null) return;
+        if (!name.trim()) { alert("اكتب اسم المنتج أولاً."); return; }
+        const quantity = Number(prompt("الكمية:", "1"));
+        if (!Number.isInteger(quantity) || quantity < 1) { alert("الكمية يجب أن تكون رقمًا صحيحًا أكبر من صفر."); return; }
+        const unitPrice = Number(prompt("سعر القطعة الواحدة بالجنيه:", "0"));
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) { alert("السعر غير صحيح."); return; }
+        const typeChoice = prompt("نوع الصنف: اكتب 1 لجهاز، 2 لإكسسوار، 3 لصنف آخر:", "3");
+        if (typeChoice === null) return;
+        const itemType = typeChoice === "1" ? "phone" : typeChoice === "2" ? "accessory" : "other";
+        if (!["1", "2", "3"].includes(typeChoice)) { alert("اختيار نوع الصنف غير صحيح."); return; }
+
+        // خصم الكمية من المخزون إذا كان الصنف مربوطًا بمخزون الأجهزة أو الإكسسوارات.
+        let trackedStock = false;
+        let consumedUnits = 0;
+        if (itemType === "accessory" && window.actAccessoryConsumeSale) {
+            const stock = window.actAccessoryConsumeSale(name.trim(), quantity);
+            if (stock?.matched && !stock.ok) { alert("الكمية غير متاحة في مخزون الإكسسوارات."); return; }
+            trackedStock = !!stock?.matched;
+            consumedUnits = trackedStock ? quantity : 0;
+        } else if (itemType === "phone" && window.actPhoneInventoryConsumeSale) {
+            for (let unit = 0; unit < quantity; unit++) {
+                const stock = window.actPhoneInventoryConsumeSale(name.trim(), "");
+                if (stock?.matched && !stock.ok) {
+                    if (consumedUnits) window.actPhoneInventoryRestoreSale?.(name.trim(), "", consumedUnits);
+                    alert("كمية الجهاز غير متاحة في المخزون؛ تم التراجع عن الخصم الجزئي.");
+                    return;
+                }
+                if (stock?.matched) { trackedStock = true; consumedUnits++; }
+            }
+        }
+
+        if (!Array.isArray(sale.items)) {
+            sale.items = [{ type: "other", name: sale.productName || "الصنف السابق", quantity: 1, unitPrice: Number(sale.price || sale.total || 0), returnedQuantity: Number(sale.returnedQuantity || 0) }];
+        }
+        sale.items.push({ type: itemType, name: name.trim(), quantity, unitPrice, returnedQuantity: 0, addedAfterInvoice: true });
+        if (trackedStock) {
+            sale.stockMovements = Array.isArray(sale.stockMovements) ? sale.stockMovements : [];
+            sale.stockMovements.push({ type: itemType, name: name.trim(), serial: "", quantity: consumedUnits, editedInvoice: true });
+        }
+        const subtotal = sale.items.reduce((sum, item) => sum + Math.max(0, Number(item.unitPrice ?? item.price ?? 0)) * Math.max(0, Number(item.quantity || 1)), 0);
+        sale.price = subtotal;
+        sale.total = Math.max(0, subtotal - Number(sale.discount || 0));
+        sale.due = Math.max(0, sale.total - Number(sale.paid || 0));
+        sale.productName = sale.items.map(item => item.name).filter(Boolean).join("، ");
+        sale.updatedAt = new Date().toISOString();
+        sale.editHistory = Array.isArray(sale.editHistory) ? sale.editHistory : [];
+        sale.editHistory.unshift({ action: "إضافة صنف للفاتورة", item: name.trim(), quantity, unitPrice, date: sale.updatedAt });
+        saveSalesData();
+        renderSalesHistory();
+        renderSalesReports();
+        if (typeof addNotificationFromOperation === "function") addNotificationFromOperation({ type: "sale-edit", icon: "🧾", title: "تم تعديل فاتورة مبيعات", details: `فاتورة #${sale.invoiceNumber} · إضافة ${name.trim()} × ${quantity}` });
+        alert(`تمت إضافة ${name.trim()} × ${quantity} إلى الفاتورة #${sale.invoiceNumber}.`);
+    }
 
     /* =========================================================
        DELETE SALE
@@ -15994,6 +16100,7 @@ if (walletCancelOperation) {
  
     function initializeSalesSystem() {
 
+        ensureSalesMultiItemUI();
         initSalesEvents();
 
         loadSalesData();
@@ -16908,6 +17015,9 @@ function getPhonePurchaseCards() {
         paid: Number(record.paid) || 0,
         total: Number(record.total) || 0,
         category: record.category,
+        boxIncluded: record.boxIncluded !== false,
+        photo: record.photo || "",
+        independentId: String(record.id),
         createdAt: record.createdAt || record.updatedAt || ""
     }));
     return [...direct, ...independent].sort((a, b) => String(b.date || b.createdAt || "").localeCompare(String(a.date || a.createdAt || "")));
@@ -16938,6 +17048,8 @@ function saveIndependentPhonePurchaseFromForm(cardId, fields) {
         total: quantity * (Number.isFinite(unitPrice) ? unitPrice : 0),
         date: fields.date,
         notes: fields.notes,
+        boxIncluded: fields.boxIncluded !== false,
+        photo: fields.photo || oldRecord.photo || "",
         category: "phones",
         updatedAt: new Date().toISOString()
     };
@@ -17101,6 +17213,12 @@ function savePhonePurchases() {
             notes.value = ""; 
         } 
  
+        const box = document.getElementById("purchase-box-included");
+        const photo = document.getElementById("purchase-device-photo");
+        const preview = document.getElementById("purchase-device-photo-preview");
+        if (box) box.value = "yes";
+        if (photo) { photo.value = ""; photo.dataset.imageData = ""; }
+        if (preview) { preview.removeAttribute("src"); preview.style.display = "none"; }
         editingPurchaseId = null; 
  
         if (savePurchaseButton) { 
@@ -17279,6 +17397,7 @@ function updateActPurchaseDashboard() {
                                             ${isPhonePurchaseComplete(purchase) ? "✏️ تعديل" : "✏️ استكمال البيانات"} 
                                         </button> 
  
+                                        <button type="button" class="purchase-transfer-button" data-transfer-purchase="${escapeHTML(purchase.cardId || purchase.id)}">➡️ نقل إلى بيع التلفونات</button>
                                         <button 
                                             type="button" 
                                             class="purchase-print-button" 
@@ -17311,6 +17430,8 @@ function updateActPurchaseDashboard() {
                                     🛒 
                                 </div> 
  
+                                ${purchase.photo ? `<img class="purchase-device-photo" src="${purchase.photo}" alt="صورة الجهاز">` : ""}
+                                <div class="device-info purchase-detail-row"><strong>حالة الكرتونة:</strong> <span>${purchase.boxIncluded === false ? "بدون كرتونة" : "معاه كرتونة"}</span></div>
                                 <h3> 
                                     ${escapeHTML( 
                                         purchase.phoneName || "" 
@@ -17388,7 +17509,7 @@ function updateActPurchaseDashboard() {
                                         : "" 
                                 } 
  
-                                ${Number(purchase.quantity || 1) > 1 ? `<div class="device-info">📦 الكمية: ${Number(purchase.quantity).toLocaleString("ar-EG")}</div>` : ""}
+                                ${Number(purchase.quantity || 1) > 1 ? `<div class="device-info purchase-detail-row"><strong>الكمية:</strong> <span>${Number(purchase.quantity).toLocaleString("ar-EG")}</span></div>` : ""}
 
                                 ${ 
                                     purchase.date 
@@ -17538,7 +17659,13 @@ function updateActPurchaseDashboard() {
                             if (notes) { 
                                 notes.value = 
                                     purchase.notes || ""; 
-                            } 
+                            }
+                            const box = document.getElementById("purchase-box-included");
+                            const photo = document.getElementById("purchase-device-photo");
+                            const preview = document.getElementById("purchase-device-photo-preview");
+                            if (box) box.value = purchase.boxIncluded === false ? "no" : "yes";
+                            if (photo) photo.dataset.imageData = purchase.photo || "";
+                            if (preview) { preview.src = purchase.photo || ""; preview.style.display = purchase.photo ? "block" : "none"; } 
  
                             editingPurchaseId = purchase.source === "independent"
                                 ? "independent:" + String(purchase.independentId)
@@ -18087,9 +18214,10 @@ function updateActPurchaseDashboard() {
             ); 
  
         const notes = 
-            document.getElementById( 
-                "purchase-notes" 
-            ); 
+            document.getElementById("purchase-notes");
+        const boxIncluded = document.getElementById("purchase-box-included");
+        const photoInput = document.getElementById("purchase-device-photo");
+        const photoData = photoInput?.dataset.imageData || ""; 
  
         const phoneName = 
             phone 
@@ -18124,7 +18252,9 @@ function updateActPurchaseDashboard() {
                 sellerPhone: sellerPhone ? sellerPhone.value.trim() : "",
                 price: price ? price.value.trim() : "",
                 date: date ? date.value : "",
-                notes: notes ? notes.value.trim() : ""
+                notes: notes ? notes.value.trim() : "",
+                boxIncluded: boxIncluded?.value !== "no",
+                photo: photoData || (findPhonePurchaseCard(editingPurchaseId)?.photo || "")
             });
             if (!updated) return;
             editingPurchaseId = null;
@@ -18202,7 +18332,9 @@ function updateActPurchaseDashboard() {
                 notes: 
                     notes 
                         ? notes.value.trim() 
-                        : "", 
+                        : "",
+                boxIncluded: boxIncluded?.value !== "no",
+                photo: photoData || oldPurchase.photo || "", 
  
                 updatedAt: 
                     new Date().toISOString() 
@@ -18268,7 +18400,9 @@ function updateActPurchaseDashboard() {
             notes: 
                 notes 
                     ? notes.value.trim() 
-                    : "", 
+                    : "",
+            boxIncluded: boxIncluded?.value !== "no",
+            photo: photoData, 
  
             createdAt: 
                 new Date().toISOString() 
@@ -18457,6 +18591,90 @@ purchaseTab.addEventListener(
  
     } 
  
+    const purchasePhotoInput = document.getElementById("purchase-device-photo");
+    const purchasePhotoPreview = document.getElementById("purchase-device-photo-preview");
+    purchasePhotoInput?.addEventListener("change", function () {
+        const file = this.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith("image/")) { alert("اختر صورة صالحة."); return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const scale = Math.min(1, 1000 / Math.max(img.width, img.height));
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+                this.dataset.imageData = canvas.toDataURL("image/jpeg", 0.78);
+                if (purchasePhotoPreview) { purchasePhotoPreview.src = this.dataset.imageData; purchasePhotoPreview.style.display = "block"; }
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // زر نقل الجهاز من المشتريات إلى المبيعات — يربط مرة واحدة بعد تجهيز عناصر القسم.
+    if (purchasesList && purchasesList.dataset.transferHandler !== "1") {
+        purchasesList.dataset.transferHandler = "1";
+        purchasesList.addEventListener("click", function (event) {
+            const target = event.target;
+            const button = target && target.closest ? target.closest(".purchase-transfer-button") : null;
+            if (!button) return;
+            const purchase = findPhonePurchaseCard(button.dataset.transferPurchase);
+            if (!purchase || (purchase.source !== "phone" && !(purchase.source === "independent" && purchase.category === "phones"))) {
+                alert("يمكن نقل مشتريات التلفونات فقط. مشتريات الإكسسوارات وقطع الغيار تظل في سجل المشتريات.");
+                return;
+            }
+            if (!confirm("نقل الجهاز إلى قسم بيع التلفونات؟")) return;
+            const device = {
+                id: "device-" + Date.now(),
+                phoneName: purchase.phoneName || "",
+                serialNumber: purchase.serial || "",
+                serial: purchase.serial || "",
+                purchasePrice: Number(purchase.price || 0),
+                phonePrice: Number(purchase.price || 0),
+                sellerName: purchase.sellerName || "",
+                sellerPhone: purchase.sellerPhone || "",
+                boxIncluded: purchase.boxIncluded !== false,
+                photo: purchase.photo || "",
+                notes: purchase.notes || "",
+                status: "البيع",
+                category: SECTIONS.SALE,
+                section: "sale",
+                date: purchase.date || new Date().toISOString().slice(0, 10),
+                createdAt: new Date().toISOString()
+            };
+            devices.unshift(device);
+            if (purchase.source === "independent") {
+                if (!deleteIndependentPhonePurchase(purchase.cardId || purchase.id)) {
+                    devices = devices.filter(row => String(row.id) !== String(device.id));
+                    alert("تعذر إتمام النقل من سجل المشتريات. لم يتم حذف عملية الشراء.");
+                    return;
+                }
+                // deleteIndependentPhonePurchase handles inventory removal using the canonical stored record.
+            } else {
+                phonePurchases = phonePurchases.filter(function (row) {
+                    return String(row.id) !== String(purchase.id);
+                });
+                savePhonePurchases();
+                window.actPhoneInventoryRemovePurchase?.("phone", purchase);
+            }
+            saveDevices();
+            renderPhonePurchases();
+            if (typeof renderSaleDevices === "function") renderSaleDevices();
+            if (typeof addNotificationFromOperation === "function") {
+                addNotificationFromOperation({
+                    type: "phone-transfer",
+                    icon: "📱",
+                    title: "تم نقل جهاز للمبيعات",
+                    details: device.phoneName
+                });
+            }
+            alert("تم نقل الجهاز إلى بيع التلفونات.");
+        });
+    }
+
     openSaleTab(); 
  
 }); 
@@ -19731,6 +19949,33 @@ document.addEventListener("DOMContentLoaded", function () {
     const saveButton = form
         ? form.querySelector('[type="submit"]')
         : null;
+    const addPurchaseItemButton = section.querySelector("#ind-purchase-add-item");
+    const extraPurchaseItemsHost = section.querySelector("#ind-purchase-extra-items");
+    let purchaseItemSequence = 0;
+
+    function addPurchaseInvoiceItem() {
+        if (!extraPurchaseItemsHost) return;
+        const row = document.createElement("div");
+        row.className = "ind-purchase-extra-item";
+        row.dataset.purchaseItem = String(++purchaseItemSequence);
+        row.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;padding:14px;border:1px solid #64748b55;border-radius:12px;background:var(--input-bg,#0b1626);";
+        row.innerHTML = `<label>نوع الصنف<select data-extra-category><option value="phones">📱 تلفون</option><option value="accessories">🎧 إكسسوار</option><option value="parts">🔧 قطعة غيار</option></select></label><label>اسم الصنف<input data-extra-product type="text" placeholder="اسم المنتج" required></label><label>الكمية<input data-extra-quantity type="number" min="1" step="1" value="1" required></label><label>سعر القطعة<input data-extra-price type="number" min="0" step="0.01" value="0" required></label><div style="display:flex;align-items:end;"><button type="button" data-remove-extra style="padding:10px 14px;border:0;border-radius:9px;cursor:pointer;">حذف الصنف ✕</button></div>`;
+        extraPurchaseItemsHost.appendChild(row);
+        row.querySelector("[data-remove-extra]").addEventListener("click", () => { row.remove(); updatePreview(); });
+        row.addEventListener("input", updatePreview);
+        row.addEventListener("change", updatePreview);
+    }
+
+    function readExtraPurchaseItems() {
+        return Array.from(extraPurchaseItemsHost?.querySelectorAll("[data-purchase-item]") || []).map(row => ({
+            category: row.querySelector("[data-extra-category]")?.value || "accessories",
+            product: row.querySelector("[data-extra-product]")?.value.trim() || "",
+            quantity: Number(row.querySelector("[data-extra-quantity]")?.value || 0),
+            unitPrice: Number(row.querySelector("[data-extra-price]")?.value || 0)
+        })).filter(item => item.product);
+    }
+
+    addPurchaseItemButton?.addEventListener("click", addPurchaseInvoiceItem);
 
     if (
         !form || !productInput || !supplierInput ||
@@ -19849,7 +20094,8 @@ function savePurchases() {
             return 0;
         }
 
-        return quantity * price;
+        const extrasTotal = readExtraPurchaseItems().reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+        return quantity * price + extrasTotal;
     }
 
     function updatePreview() {
@@ -19893,7 +20139,7 @@ function savePurchases() {
         }, 0);
 
         if (countElement) {
-            countElement.textContent = purchases.length.toLocaleString("ar-EG");
+            countElement.textContent = new Set(purchases.map(item => item.invoiceId || ("single-" + item.id))).size.toLocaleString("ar-EG");
         }
 
         if (totalElement) {
@@ -19908,91 +20154,74 @@ function savePurchases() {
 
     function renderPurchases() {
         updateStats();
-
         const query = searchInput.value.trim().toLocaleLowerCase();
-
-        const filtered = purchases.filter(function (purchase) {
-            const searchable = [
-                purchase.product,
-                purchase.supplier,
-                purchase.date,
-                purchase.notes,
-                categoryNames[purchase.category] || purchase.category
-            ].join(" ").toLocaleLowerCase();
-
-            return searchable.includes(query);
+        const matches = purchases.filter(function (purchase) {
+            return [purchase.product, purchase.supplier, purchase.date, purchase.notes,
+                purchase.invoiceId, categoryNames[purchase.category] || purchase.category]
+                .join(" ").toLocaleLowerCase().includes(query);
         });
-
-        if (filtered.length === 0) {
-            purchasesList.innerHTML =
-                '<div class="ind-purchases-empty">' +
-                (
-                    purchases.length
-                        ? "لا توجد نتائج مطابقة للبحث."
-                        : "لا توجد عمليات شراء مسجلة حتى الآن."
-                ) +
-                "</div>";
+        if (!matches.length) {
+            purchasesList.innerHTML = '<div class="ind-purchases-empty">' +
+                (purchases.length ? "لا توجد نتائج مطابقة للبحث." : "لا توجد عمليات شراء مسجلة حتى الآن.") + '</div>';
             return;
         }
-
-        purchasesList.innerHTML = filtered.map(function (purchase) {
+        const grouped = new Map();
+        matches.forEach(function (purchase) {
+            const key = purchase.invoiceId || ("single-" + purchase.id);
+            if (!grouped.has(key)) grouped.set(key, []);
+            grouped.get(key).push(purchase);
+        });
+        purchasesList.innerHTML = Array.from(grouped.entries()).map(function ([invoiceId, lines]) {
+            const first = lines[0];
+            const total = lines.reduce((sum, item) => sum + Number(item.total || 0), 0);
+            const paid = lines.reduce((sum, item) => sum + Number(item.paid || 0), 0);
+            const quantity = lines.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+            const cardId = "purchase-invoice-" + String(invoiceId).replace(/[^a-zA-Z0-9_-]/g, "");
             return `
-                <article class="ind-purchase-record"
-                    style="padding:16px;margin-bottom:12px;border:1px solid #64748b55;border-radius:14px;background:var(--input-bg,#0b1626);">
-
-                    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-                        <div>
-                            <strong style="font-size:17px;">
-                                ${escapeHTML(purchase.product)}
-                            </strong>
-                            <div style="opacity:.75;margin-top:7px;">
-                                ${escapeHTML(categoryNames[purchase.category] || "مشتريات")}
-                                ${purchase.supplier
-                                    ? " • المورد: " + escapeHTML(purchase.supplier)
-                                    : ""}
-                            </div>
-                        </div>
-
-                        <strong style="color:#38bdf8;">
-                            ${escapeHTML(money(purchase.total))}
-                        </strong>
-                    </div>
-
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:14px;font-size:13px;">
-                        <div>الكمية: ${escapeHTML(purchase.quantity)}</div>
-                        <div>سعر القطعة: ${escapeHTML(money(purchase.unitPrice))}</div>
-                        <div>المدفوع: ${escapeHTML(money(purchase.paid))}</div>
-                        <div>التاريخ: ${escapeHTML(purchase.date)}</div>
-                    </div>
-
-                    ${purchase.notes ? `
-                        <div style="margin-top:12px;opacity:.8;white-space:pre-wrap;">
-                            ملاحظات: ${escapeHTML(purchase.notes)}
-                        </div>
-                    ` : ""}
-
-                    <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:15px;">
-                        <button type="button"
-                            data-purchase-action="edit"
-                            data-purchase-id="${escapeHTML(purchase.id)}"
-                            style="padding:9px 15px;border:0;border-radius:9px;cursor:pointer;">
-                            ✏️ تعديل
-                        </button>
-
-                        <button type="button"
-                            data-purchase-action="delete"
-                            data-purchase-id="${escapeHTML(purchase.id)}"
-                            style="padding:9px 15px;border:0;border-radius:9px;cursor:pointer;">
-                            🗑️ حذف
-                        </button>
-                    </div>
-                </article>
-            `;
+              <article class="ind-purchase-record ind-purchase-invoice" style="padding:15px;margin-bottom:12px;border:1px solid #64748b55;border-radius:14px;background:var(--input-bg,#0b1626);">
+                <div class="ind-purchase-invoice-head">
+                  <div><strong style="font-size:16px">فاتورة مشتريات #${escapeHTML(String(invoiceId).slice(-8))}</strong>
+                    <div class="ind-purchase-invoice-meta"><span>المورد: ${escapeHTML(first.supplier || "غير محدد")}</span><span>التاريخ: ${escapeHTML(first.date || "—")}</span><span>${lines.length} صنف</span><span>الكمية: ${quantity.toLocaleString("ar-EG")}</span></div>
+                  </div>
+                  <div class="ind-purchase-invoice-total">${escapeHTML(money(total))}<small>المدفوع: ${escapeHTML(money(paid))}</small></div>
+                </div>
+                <button type="button" class="ind-purchase-details-toggle" aria-expanded="false" aria-controls="${cardId}">عرض تفاصيل الفاتورة <span>⌄</span></button>
+                <div id="${cardId}" class="ind-purchase-invoice-lines" hidden>
+                  ${lines.map(function (purchase) { return `
+                    <section class="ind-purchase-line">
+                      <div class="ind-purchase-line-title"><strong>${escapeHTML(purchase.product || "صنف بدون اسم")}</strong><b>${escapeHTML(money(purchase.total))}</b></div>
+                      <div class="ind-purchase-line-data">
+                        <span><b>نوع الصنف:</b> ${escapeHTML(categoryNames[purchase.category] || "مشتريات")}</span>
+                        <span><b>الكمية:</b> ${escapeHTML(purchase.quantity)}</span>
+                        <span><b>سعر القطعة:</b> ${escapeHTML(money(purchase.unitPrice))}</span>
+                        <span><b>إجمالي الصنف:</b> ${escapeHTML(money(purchase.total))}</span>
+                        <span><b>المدفوع:</b> ${escapeHTML(money(purchase.paid))}</span>
+                      </div>
+                      ${purchase.notes ? `<p class="ind-purchase-line-notes">ملاحظات: ${escapeHTML(purchase.notes)}</p>` : ""}
+                      <div class="ind-purchase-line-actions">
+                        <button type="button" data-purchase-action="edit" data-purchase-id="${escapeHTML(purchase.id)}">✏️ تعديل الصنف</button>
+                        <button type="button" data-purchase-action="delete" data-purchase-id="${escapeHTML(purchase.id)}">🗑️ حذف الصنف</button>
+                      </div>
+                    </section>`; }).join("")}
+                  <div class="ind-purchase-invoice-footer"><b>إجمالي الفاتورة: ${escapeHTML(money(total))}</b><b>المتبقي: ${escapeHTML(money(Math.max(0,total-paid)))}</b></div>
+                </div>
+              </article>`;
         }).join("");
+        purchasesList.querySelectorAll('.ind-purchase-details-toggle').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const panel = document.getElementById(button.getAttribute('aria-controls'));
+                if (!panel) return;
+                const opening = panel.hidden;
+                panel.hidden = !opening;
+                button.setAttribute('aria-expanded', String(opening));
+                button.innerHTML = opening ? 'إخفاء تفاصيل الفاتورة <span>⌃</span>' : 'عرض تفاصيل الفاتورة <span>⌄</span>';
+            });
+        });
     }
 
     function clearForm() {
         form.reset();
+        if (extraPurchaseItemsHost) extraPurchaseItemsHost.innerHTML = "";
         editingId = null;
         categoryInput.value = "phones";
         dateInput.value = getToday();
@@ -20129,27 +20358,32 @@ function savePurchases() {
             return;
         }
 
-        const total = quantity * unitPrice;
-
-        if (!Number.isFinite(total)) {
+        const extraItems = editingId ? [] : readExtraPurchaseItems();
+        for (const item of extraItems) {
+            if (!categoryNames[item.category] || !Number.isSafeInteger(item.quantity) || item.quantity < 1 || !Number.isFinite(item.unitPrice) || item.unitPrice < 0) {
+                alert("راجع نوع وكمية وسعر كل صنف إضافي.");
+                return;
+            }
+        }
+        const invoiceId = editingId ? (purchases.find(p => p.id === editingId)?.invoiceId || makeId()) : makeId();
+        const invoiceLines = [{ product, category, quantity, unitPrice }, ...extraItems];
+        const invoiceTotal = invoiceLines.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+        if (!Number.isFinite(invoiceTotal)) {
             alert("إجمالي العملية أكبر من القيمة التي يمكن حسابها.");
             return;
         }
-
-        const record = {
-            id: editingId || makeId(),
-            product: product,
-            supplier: supplier,
-            quantity: quantity,
-            unitPrice: unitPrice,
-            total: total,
-            paid: paid,
-            date: date,
-            notes: notes,
-            category: category,
-            updatedAt: new Date().toISOString()
-        };
-
+        const invoiceRecords = invoiceLines.map((item, index) => {
+            const lineTotal = item.quantity * item.unitPrice;
+            const linePaid = invoiceTotal > 0 ? paid * (lineTotal / invoiceTotal) : (index === 0 ? paid : 0);
+            return {
+                id: index === 0 ? (editingId || makeId()) : makeId(),
+                invoiceId, invoiceLine: index + 1, invoiceLinesCount: invoiceLines.length,
+                product: item.product, supplier, quantity: item.quantity, unitPrice: item.unitPrice,
+                total: lineTotal, paid: linePaid, date, notes, category: item.category,
+                updatedAt: new Date().toISOString()
+            };
+        });
+        const record = invoiceRecords[0];
         const previousPurchases = purchases.slice();
         const oldRecord = editingId ? purchases.find(p => p.id === editingId) : null;
 
@@ -20158,7 +20392,7 @@ function savePurchases() {
                 return purchase.id === editingId ? record : purchase;
             });
         } else {
-            purchases.unshift(record);
+            purchases = [...invoiceRecords, ...purchases];
         }
 
         if (!savePurchases()) {
@@ -20171,6 +20405,11 @@ function savePurchases() {
         }
         if (record.category === "phones") {
             window.actPhoneInventoryUpsertPurchase?.("independent", record, oldRecord);
+        }
+        if (!editingId) {
+            invoiceRecords.slice(1).filter(line => line.category === "phones").forEach(line => {
+                window.actPhoneInventoryUpsertPurchase?.("independent", line, null);
+            });
         }
 
         clearForm();
@@ -22259,95 +22498,60 @@ document.documentElement.classList.toggle(
 
     function navigateToResult(result) {
         closeResults();
-
         const destination = result.destination || {};
-        const buttonId = destination.button;
         const sectionId = destination.section;
 
-        if (buttonId) {
-            clickButton(buttonId);
-        }
+        // Navigate through the app's own menu controls first. Do not forcibly hide
+        // unrelated containers: several modules are nested and that caused a blank page.
+        if (destination.button) clickButton(destination.button);
 
-        // فتح العرض الفرعي للمبيعات عند الحاجة.
-        if (destination.target) {
+        const openTarget = () => {
+            if (!destination.target) return;
             const target = document.getElementById(destination.target);
+            if (target && target.isConnected) target.click();
+        };
+        openTarget();
 
-            if (target) {
-                if (
-                    target.classList.contains("independent-sales-card")
-                ) {
-                    target.click();
-                } else if (
-                    target.id === "notification-bell-button"
-                ) {
-                    target.click();
-                }
+        const revealAncestors = (node) => {
+            let parent = node;
+            while (parent && parent !== document.body) {
+                if (parent.hidden) parent.hidden = false;
+                if (getComputedStyle(parent).display === "none") parent.style.setProperty("display", "block", "important");
+                parent = parent.parentElement;
             }
-        }
+        };
 
-        // فتح قسم فرعي معروف بعد تنفيذ التنقل الرئيسي.
-        if (sectionId) {
-            // Search navigation must open one destination only, not leave the previous module visible.
-            document.querySelectorAll(".act-extra-section, #day-close-section, #home-section, .sales-area, #customers-section, #employees-section, #more-section, #independent-sales-section, #independent-purchases-section, #wallet-section, #account-section").forEach(function (peer) {
-                if (peer.id !== sectionId && !peer.contains(document.getElementById(sectionId))) peer.style.display = "none";
-            });
-            const section = document.getElementById(sectionId);
-
-            if (section) {
-                const hidden = section.hidden ||
-                    getComputedStyle(section).display === "none";
-
-                if (hidden && !destination.target) {
-                    section.hidden = false;
-                    section.style.display = "";
-                }
-
-                section.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start"
-                });
-            }
-        }
-
-        if (result.kind === "interface" && result.element) {
+        if (result.kind === "interface" && result.element && result.element.isConnected) {
             const element = result.element;
-
-            if (element.isConnected) {
-                element.click();
-
-                setTimeout(function () {
-                    element.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center"
-                    });
-                }, 150);
-
-                return;
-            }
+            // A section/menu target was already activated above; only click ordinary controls.
+            if (!destination.target && !destination.section) element.click();
+            setTimeout(() => {
+                revealAncestors(element);
+                element.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 180);
+            return;
         }
 
-        if (result.kind === "record" && result.record) {
-            setTimeout(function () {
-                const element = findMatchingVisibleRecord(result.record);
-
-                if (element) {
-                    element.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center"
-                    });
-
-                    element.style.outline =
-                        "2px solid #20baff";
-
-                    element.style.outlineOffset = "4px";
-
-                    setTimeout(function () {
-                        element.style.outline = "";
-                        element.style.outlineOffset = "";
-                    }, 2200);
+        setTimeout(() => {
+            let target = null;
+            if (result.kind === "record" && result.record) {
+                target = findMatchingVisibleRecord(result.record);
+                if (!target && result.record.id) {
+                    const safeId = String(result.record.id).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+                    target = document.querySelector(`[data-id="${safeId}"], [data-device-id="${safeId}"], [data-sale-id="${safeId}"]`);
                 }
-            }, 350);
-        }
+            }
+            if (!target && sectionId) target = document.getElementById(sectionId);
+            if (target) {
+                revealAncestors(target);
+                target.scrollIntoView({ behavior: "smooth", block: result.kind === "record" ? "center" : "start" });
+                if (result.kind === "record") {
+                    target.style.outline = "2px solid #20baff";
+                    target.style.outlineOffset = "4px";
+                    setTimeout(() => { target.style.outline = ""; target.style.outlineOffset = ""; }, 2200);
+                }
+            }
+        }, 420);
     }
 
     /* =========================================
@@ -23327,7 +23531,7 @@ if ("serviceWorker" in navigator) {
   function saveCustomers(rows){const raw=JSON.stringify(rows);try{localStorage.setItem(customerKey(),raw);}catch(err){console.error('Customer save failed',err);alert('تعذر حفظ بيانات العميل على هذا الجهاز.');return false;}if(typeof saveUserDataToCloud==='function'){try{saveUserDataToCloud(customerKey(),raw);}catch(err){console.error('Customer cloud sync failed',err);}}window.dispatchEvent(new Event('act-user-data-ready'));return true;}
   function renderCustomers(){const list=$('act-customer-list');if(!list)return;const all=readCustomers();const q=($('act-customer-search')?.value||'').trim().toLocaleLowerCase();const rows=all.filter(x=>[x.name,x.phone,x.email,x.address].some(v=>String(v||'').toLocaleLowerCase().includes(q)));const stats=$('act-customer-stats');if(stats)stats.innerHTML=[['إجمالي العملاء',all.length,'👥'],['لديهم هاتف',all.filter(x=>x.phone).length,'📱'],['أضيفوا هذا الشهر',all.filter(x=>String(x.createdAt||'').slice(0,7)===new Date().toISOString().slice(0,7)).length,'🗓️']].map(x=>`<article class="act-module-stat"><span>${x[2]}</span><small>${x[0]}</small><strong>${x[1]}</strong></article>`).join('');const count=$('act-customer-count');if(count)count.textContent=`${rows.length} عميل`;list.innerHTML='';if(!rows.length){list.innerHTML='<div class="act-extra-empty">لا توجد نتائج. أضف أول عميل من النموذج.</div>';return;}rows.forEach(customer=>{const card=document.createElement('article');card.className='act-extra-item act-customer-card';const info=document.createElement('div');const title=document.createElement('strong');title.textContent=customer.name||'عميل بدون اسم';const meta=document.createElement('small');meta.textContent=`📱 ${customer.phone||'بدون هاتف'}${customer.email?' · ✉️ '+customer.email:''}${customer.address?' · 📍 '+customer.address:''}`;info.append(title,meta);if(customer.notes){const note=document.createElement('small');note.textContent='ملاحظات: '+customer.notes;info.append(note);}const actions=document.createElement('div');actions.className='act-extra-actions';const invoices=document.createElement('button');invoices.type='button';invoices.textContent='سجل الفواتير';invoices.onclick=()=>showCustomerInvoices(customer);const edit=document.createElement('button');edit.type='button';edit.textContent='تعديل';edit.onclick=()=>{editingCustomerId=customer.id;$('act-customer-name').value=customer.name||'';$('act-customer-phone').value=customer.phone||'';$('act-customer-email').value=customer.email||'';$('act-customer-address').value=customer.address||'';$('act-customer-notes').value=customer.notes||'';$('act-customer-save').textContent='حفظ التعديلات';$('act-customer-form').scrollIntoView({behavior:'smooth',block:'center'});};const del=document.createElement('button');del.type='button';del.textContent='حذف';del.onclick=()=>{if(!confirm('تأكيد حذف ملف العميل؟ لن يتم حذف فواتيره أو عمليات البيع السابقة.'))return;if(saveCustomers(readCustomers().filter(x=>x.id!==customer.id))){notify('تم حذف ملف عميل',customer.name,'👥','customers');renderCustomers();}};actions.append(invoices,edit,del);card.append(info,actions);list.append(card);});}
   window.actCustomerUpsertFromSale=function(data){if(!data||!data.name||!data.phone)return;const rows=readCustomers();const phone=String(data.phone).trim();const existing=rows.find(x=>String(x.phone||'').trim()===phone);if(existing){existing.name=String(data.name).trim();existing.updatedAt=new Date().toISOString();}else{rows.unshift({id:'cust_'+Date.now(),name:String(data.name).trim(),phone,email:'',address:'',notes:'تم إنشاء الملف تلقائيًا من فاتورة بيع',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});}saveCustomers(rows);};
-  function showCustomerInvoices(customer){const sales=readArrayFor('sales');const invoices=sales.filter(x=>String(x.customerPhone||'').trim()===String(customer.phone||'').trim()||(String(x.customerName||'').trim()===String(customer.name||'').trim()&&customer.name));const details=invoices.length?invoices.slice(0,20).map(x=>`${x.invoiceNumber||x.id||'فاتورة'} — ${money(x.total??x.price??0)} ج.م — ${String(x.date||x.createdAt||'').slice(0,10)}`).join('\n'):'لا توجد فواتير مطابقة لهذا العميل في سجل المبيعات.';alert(`سجل فواتير: ${customer.name}\n\n${details}`);}
+  function showCustomerInvoices(customer){const sales=readArrayFor('sales');const phone=String(customer.phone||'').trim();const name=String(customer.name||'').trim();const invoices=sales.filter(x=>(phone&&String(x.customerPhone||'').trim()===phone)||(name&&String(x.customerName||'').trim()===name)).sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0));const details=invoices.length?invoices.map(x=>`${String(x.date||x.createdAt||'').slice(0,10)} — فاتورة #${x.invoiceNumber||x.id||'—'} — ${money(x.total??x.price??0)} ج.م — ${Array.isArray(x.items)?x.items.map(i=>`${i.name} × ${i.quantity||1}`).join('، '):(x.productName||'—')}`).join('\n'):'لا توجد فواتير مطابقة لهذا العميل في سجل المبيعات.';alert(`سجل فواتير: ${customer.name}\nعدد الفواتير: ${invoices.length}\n\n${details}`);}
   $('act-customer-form')?.addEventListener('submit',e=>{e.preventDefault();const name=$('act-customer-name').value.trim(),phone=$('act-customer-phone').value.trim();if(!name||!phone){alert('اكتب اسم العميل ورقم الهاتف.');return;}const rows=readCustomers();const duplicate=rows.find(x=>x.id!==editingCustomerId&&x.phone===phone);if(duplicate){alert('رقم الهاتف مسجل بالفعل لعميل آخر.');return;}const existing=rows.find(x=>x.id===editingCustomerId);const item={id:editingCustomerId||('cust_'+Date.now()),name,phone,email:$('act-customer-email').value.trim(),address:$('act-customer-address').value.trim(),notes:$('act-customer-notes').value.trim(),createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};const index=rows.findIndex(x=>x.id===editingCustomerId);if(index>=0)rows[index]=item;else rows.unshift(item);if(saveCustomers(rows)){notify(editingCustomerId?'تم تحديث بيانات عميل':'تمت إضافة عميل جديد',`${name} — ${phone}`,'👥','customers');editingCustomerId=null;e.target.reset();$('act-customer-save').textContent='💾 حفظ العميل';renderCustomers();}});
   $('act-customer-search')?.addEventListener('input',renderCustomers);
   $('act-customer-cancel')?.addEventListener('click',()=>{editingCustomerId=null;$('act-customer-form')?.reset();$('act-customer-save').textContent='💾 حفظ العميل';});

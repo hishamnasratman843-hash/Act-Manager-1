@@ -1,5 +1,5 @@
-const CACHE_NAME = 'act-manager-v44-theme-lang-fix';
-const APP_SHELL = ['./', './index.html', './owner.html', './style.css', './script.js', './fix-activation.js', './customer-contact.js', './owner-console.js', './act-control-config.js', './i18n-en.js', './pwa-install.js', './subscription-ui.js', './manifest.json', './repair-tracking.html', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE_NAME = 'act-manager-v47-search-invoice-fix';
+const APP_SHELL = ['./', './index.html', './owner.html', './style.css', './script.js', './act-workspace-persistence.js', './fix-activation.js', './customer-contact.js', './owner-console.js', './act-control-config.js', './i18n-en.js', './pwa-install.js', './subscription-ui.js', './manifest.json', './repair-tracking.html', './icons/icon-192.png', './icons/icon-512.png'];
 const FIREBASE_CDN = 'https://www.gstatic.com';
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));

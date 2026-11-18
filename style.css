@@ -18196,6 +18196,13 @@ html[data-theme="light"] .employee-buttons .add-button{background:linear-gradien
 }
 #bottom-navigation .bottom-nav-label { visibility: visible !important; opacity: 1 !important; }
 
+/* FIX: collapsed side tab must not create an invisible hit area over form controls. */
+#act-owner-contact-root{pointer-events:none}
+#act-owner-contact-root > #act-owner-contact-toggle,
+#act-owner-contact-root > #act-owner-contact-launch,
+#act-owner-contact-root #act-owner-contact-panel,
+#act-owner-contact-root button,
+#act-owner-contact-root a{pointer-events:auto}
 /* ACT V26 — SIDE ARROW REVEALS SUPPORT ICON; DIALOG IS CENTERED */
 #act-owner-contact-root{position:fixed;z-index:999990;right:0;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:8px;font-family:inherit}
 #act-owner-contact-toggle{width:34px;height:58px;border:1px solid rgba(255,255,255,0.132);border-right:0;border-radius:13px 0 0 13px;background:linear-gradient(145deg,#087bd1,#3c3c3c);color:#fff;font-size:20px;font-weight:900;box-shadow:0 8px 24px rgba(0,0,0,0.36);cursor:pointer}
